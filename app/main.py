@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from . import models, auth
 from .database import SessionLocal, engine, Base
+from .resume_data import resume_data
 
 # 현재 파일(main.py)의 부모 디렉토리 (app/)
 # 이를 기준으로 템플릿, 정적 파일 경로를 설정합니다.
@@ -32,8 +33,20 @@ async def custom_404_handler(request: Request, exc):
 
 # 정적 파일 (CSS, JS, 이미지 등) 설정
 # 로그인 페이지 스타일 등 인증 없이 접근 가능한 공개 리소스용입니다.
-# app/static 폴더를 /static 경로로 마운트합니다.
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+# Homer Dashboard Assets
+# Homer가 루트(/)에서 실행될 때 필요한 리소스들을 마운트합니다.
+app.mount("/assets", StaticFiles(directory=str(BASE_DIR / "static/homer/assets")), name="homer_assets")
+app.mount("/resources", StaticFiles(directory=str(BASE_DIR / "static/homer/resources")), name="homer_resources")
+
+# Homer 루트 레벨 파일들 (manifest.json, sw.js 등)을 위한 서빙
+# /logo.png, /manifest.json 등의 요청을 처리하기 위해 별도 라우트나 마운트가 필요하지만,
+# 개별 파일이 많지 않으므로 필요 시 추가하거나, Catch-all 라우트 전에 배치해야 합니다.
+
+@app.get("/manifest.json")
+async def get_manifest():
+    return FileResponse(BASE_DIR / "static/homer/assets/manifest.json")
 
 # DB 세션 의존성 주입 함수
 def get_db():
@@ -97,25 +110,51 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 # --- 페이지 라우트 ---
 
-@app.get("/", response_class=HTMLResponse)
+# Homer가 네트워크 체크를 위해 HEAD 요청을 보내므로 GET과 HEAD를 모두 허용합니다.
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def read_root(request: Request, current_user: models.User | None = Depends(get_current_user)):
     """
-    메인 페이지 핸들러.
+    메인 페이지 핸들러 (Dashboard).
     1. 로그인하지 않음 -> 로그인 페이지로 리다이렉트
     2. 로그인했으나 미승인 -> 대기 페이지(pending.html) 표시
-    3. 승인된 사용자 -> 문서 메인(docs/index.html) 표시
+    3. 승인된 사용자 -> Homer 대시보드 (static/homer/index.html) 표시
     """
+    # HEAD 요청인 경우 body 없이 헤더만 반환
+    if request.method == "HEAD":
+        return Response(status_code=status.HTTP_200_OK)
+
     if not current_user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     if not current_user.is_active:
         return templates.TemplateResponse(request=request, name="pending.html", context={"username": current_user.username})
     
-    # 로그인하고 승인된 사용자는 docsify 페이지로 (index.html 직접 서빙)
-    # docs/index.html 경로는 app/docs/index.html
+    # Homer 대시보드 서빙
+    homer_index = BASE_DIR / "static/homer/index.html"
+    if homer_index.exists():
+        return FileResponse(homer_index)
+    return HTMLResponse("Dashboard not found", status_code=404)
+
+@app.get("/docs/", response_class=HTMLResponse)
+async def read_docs(request: Request, current_user: models.User | None = Depends(get_current_user)):
+    """
+    Docsify 문서 메인 페이지.
+    """
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    if not current_user.is_active:
+        return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+        
     index_path = BASE_DIR / "docs" / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
     return HTMLResponse("Docs index not found", status_code=404)
+
+@app.get("/resume", response_class=HTMLResponse)
+async def resume_page(request: Request):
+    """
+    이력서 페이지 렌더링.
+    """
+    return templates.TemplateResponse(request=request, name="resume.html", context={"resume": resume_data})
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -225,7 +264,14 @@ async def admin_page(request: Request, current_user: models.User | None = Depend
     
     # 미승인 사용자 목록 조회
     pending_users = db.query(models.User).filter(models.User.is_active == False).all()
-    return templates.TemplateResponse(request=request, name="admin.html", context={"users": pending_users, "user": current_user})
+    # 승인된 사용자 목록 조회 (관리자 자신 제외)
+    active_users = db.query(models.User).filter(models.User.is_active == True).all()
+    
+    return templates.TemplateResponse(request=request, name="admin.html", context={
+        "pending_users": pending_users, 
+        "active_users": active_users, 
+        "user": current_user
+    })
 
 @app.post("/admin/approve/{user_id}")
 async def approve_user(user_id: int, current_user: models.User | None = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -242,36 +288,117 @@ async def approve_user(user_id: int, current_user: models.User | None = Depends(
     
     return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
-@app.get("/{file_path:path}")
-async def serve_docs(file_path: str, request: Request, current_user: models.User | None = Depends(get_current_user)):
+@app.post("/admin/delete/{user_id}")
+async def delete_user(user_id: int, current_user: models.User | None = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    정적 문서 파일 서빙 및 Catch-all 라우트.
-    1. 로그인하지 않은 경우 -> 로그인 페이지로 리다이렉트
-    2. 로그인 후, 요청된 경로가 docs/ 폴더 내에 있으면 파일 반환
-    3. 파일이 없으면 404 에러 (custom 404 페이지 표시)
+    사용자 삭제 처리 (관리자 전용).
     """
+    if not current_user or not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    user_to_delete = db.query(models.User).filter(models.User.id == user_id).first()
+    if user_to_delete:
+        # 자기 자신 삭제 방지
+        if user_to_delete.id == current_user.id:
+             return RedirectResponse(url="/admin?error=Cannot delete yourself", status_code=status.HTTP_302_FOUND)
+
+        db.delete(user_to_delete)
+        db.commit()
+    
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.get("/docs/{file_path:path}")
+
+async def serve_docs_files(file_path: str, request: Request, current_user: models.User | None = Depends(get_current_user)):
+
+    """
+
+    Docsify 문서 파일 서빙 (/docs/...)
+
+    """
+
     if not current_user:
+
         return RedirectResponse(url="/login")
+
     if not current_user.is_active:
+
         return RedirectResponse(url="/")
+
     
-    # docs 폴더 경로
+
     docs_dir = BASE_DIR / "docs"
+
     requested_path = (docs_dir / file_path).resolve()
+
     
-    # 보안: 요청된 경로가 docs 폴더 내부에 있는지 확인 (Directory Traversal 방지)
+
     if not str(requested_path).startswith(str(docs_dir)):
+
          raise HTTPException(status_code=403, detail="Access denied")
+
     
-    # 파일이 존재하면 반환, 없으면 404
+
     if requested_path.exists() and requested_path.is_file():
-        # downloads 폴더 내의 파일이면 강제 다운로드(attachment) 처리
-        # filename 인자를 주면 FastAPI가 자동으로 Content-Disposition 헤더를 설정합니다.
+
         if requested_path.is_relative_to(docs_dir / "downloads"):
+
             return FileResponse(requested_path, filename=requested_path.name, media_type="application/octet-stream")
-            
+
         return FileResponse(requested_path)
+
     
+
     raise HTTPException(status_code=404, detail="File not found")
+
+
+
+@app.get("/{file_path:path}")
+
+async def serve_dashboard_files(file_path: str, request: Request, current_user: models.User | None = Depends(get_current_user)):
+
+    """
+
+    Homer Dashboard 관련 루트 파일 서빙 (logo.png, sw.js 등) 및 기타 404 처리.
+
+    """
+
+    if not current_user:
+
+        return RedirectResponse(url="/login")
+
+    if not current_user.is_active:
+
+        return RedirectResponse(url="/")
+
+
+
+    # Homer 정적 파일 경로
+
+    homer_dir = BASE_DIR / "static/homer"
+
+    requested_path = (homer_dir / file_path).resolve()
+
+
+
+    # 보안 체크
+
+    if not str(requested_path).startswith(str(homer_dir)):
+
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
+
+    if requested_path.exists() and requested_path.is_file():
+
+        return FileResponse(requested_path)
+
+
+
+    # 파일이 없으면 커스텀 404
+
+    raise HTTPException(status_code=404, detail="File not found")
+
+
 
     

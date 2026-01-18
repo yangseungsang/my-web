@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ resume.profile.name }} - Resume</title>
+    <link rel="stylesheet" href="/static/css/resume.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Sidebar: Profile -->
+        <aside class="sidebar">
+            <div class="profile-card">
+                <div class="profile-img">
+                    {{ resume.profile.name[0] }}
+                </div>
+                <h1 class="profile-name">{{ resume.profile.name }}</h1>
+                <div class="profile-title">{{ resume.profile.title }}</div>
+                
+                <div class="social-links">
+                    {% if resume.profile.github %}
+                    <a href="{{ resume.profile.github }}" target="_blank" class="social-btn" title="GitHub">
+                        <i class="fab fa-github"></i>
+                    </a>
+                    {% endif %}
+                    {% if resume.profile.blog %}
+                    <a href="{{ resume.profile.blog }}" target="_blank" class="social-btn" title="Blog">
+                        <i class="fas fa-rss"></i>
+                    </a>
+                    {% endif %}
+                    <a href="mailto:{{ resume.profile.email }}" class="social-btn" title="Email">
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                </div>
+
+                <div class="contact-list">
+                    {% if resume.profile.email %}
+                    <div class="contact-item">
+                        <div class="contact-icon"><i class="fas fa-envelope"></i></div>
+                        <div class="contact-text">{{ resume.profile.email }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="contact-item">
+                        <div class="contact-icon"><i class="fas fa-map-marker-alt"></i></div>
+                        <div class="contact-text">Seoul, Korea</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- About Me -->
+            <section id="about">
+                <h2 class="section-title">
+                    <div class="section-icon"><i class="fas fa-user"></i></div>
+                    About Me
+                </h2>
+                <div class="about-text">
+                    {{ resume.profile.about }}
+                </div>
+            </section>
+
+            <!-- Experience -->
+            {% if resume.careers %}
+            <section id="experience">
+                <h2 class="section-title">
+                    <div class="section-icon"><i class="fas fa-briefcase"></i></div>
+                    Work Experience
+                </h2>
+                <div class="timeline">
+                    {% for job in resume.careers %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-header">
+                            <div class="timeline-role">{{ job.position }}</div>
+                            <div class="timeline-date">{{ job.period }}</div>
+                        </div>
+                        <div class="timeline-company">
+                            <i class="fas fa-building"></i> {{ job.company }}
+                        </div>
+                        <div class="timeline-desc">{{ job.description }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Projects -->
+            {% if resume.projects %}
+            <section id="projects">
+                <h2 class="section-title">
+                    <div class="section-icon"><i class="fas fa-code-branch"></i></div>
+                    Projects
+                </h2>
+                <div class="project-grid">
+                    {% for project in resume.projects %}
+                    <div class="project-card">
+                        <div class="project-head">
+                            <div class="project-folder"><i class="far fa-folder"></i></div>
+                            <div class="project-links">
+                                {% if project.link %}
+                                <a href="{{ project.link }}" target="_blank" class="project-link" title="View Project">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="project-title">{{ project.name }}</div>
+                        <div class="project-desc">{{ project.description }}</div>
+                        {% if project.tech_stack %}
+                        <div class="tech-stack">
+                            {% for tech in project.tech_stack %}
+                            <span class="tech-badge">{{ tech }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Skills -->
+            {% if resume.skills %}
+            <section id="skills">
+                <h2 class="section-title">
+                    <div class="section-icon"><i class="fas fa-layer-group"></i></div>
+                    Skills
+                </h2>
+                <div class="skill-grid">
+                    {% for category, items in resume.skills.items() %}
+                    <div class="skill-category">
+                        <h3>{{ category }}</h3>
+                        <div class="skill-tags">
+                            {% for skill in items %}
+                            <div class="skill-tag">
+                                <i class="fas fa-check-circle"></i> {{ skill }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Education -->
+            {% if resume.education %}
+            <section id="education">
+                <h2 class="section-title">
+                    <div class="section-icon"><i class="fas fa-graduation-cap"></i></div>
+                    Education
+                </h2>
+                <div class="timeline">
+                    {% for edu in resume.education %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-header">
+                            <div class="timeline-role">{{ edu.school or edu.name }}</div>
+                            <div class="timeline-date">{{ edu.period }}</div>
+                        </div>
+                        {% if edu.major %}
+                        <div class="timeline-company">
+                            <i class="fas fa-book"></i> {{ edu.major }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+            
+            <!-- Awards & Certificates -->
+            {% if resume.certificates or resume.awards %}
+            <section id="awards">
+                <h2 class="section-title">
+                    <div class="section-icon"><i class="fas fa-award"></i></div>
+                    Awards & Certifications
+                </h2>
+                <div class="timeline">
+                    {% for cert in resume.certificates %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-header">
+                            <div class="timeline-role">{{ cert.name }}</div>
+                            <div class="timeline-date">{{ cert.date }}</div>
+                        </div>
+                        <div class="timeline-company">Certificate</div>
+                    </div>
+                    {% endfor %}
+                    {% for award in resume.awards %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-header">
+                            <div class="timeline-role">{{ award.name }}</div>
+                            <div class="timeline-date">{{ award.date }}</div>
+                        </div>
+                        <div class="timeline-company">{{ award.organization }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+        </main>
+    </div>
+
+    <button class="print-hide" onclick="window.print()" style="position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: white; width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">
+        <i class="fas fa-print"></i>
+    </button>
+</body>
+</html>
