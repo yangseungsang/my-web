@@ -15,7 +15,20 @@
       name: 'My Web Docs',
       repo: '',
       loadSidebar: true,
-      subMaxLevel: 2
+      subMaxLevel: 2,
+      markdown: {
+        renderer: {
+          link: function(href, title, text) {
+            // downloads 폴더로 가는 링크는 Docsify 처리를 우회하고 강제 다운로드 속성 추가
+            if (href.indexOf('downloads/') > -1) {
+               // href에서 혹시 붙었을지 모를 .md 제거 (여기서는 원본 href가 옴)
+               return '<a href="' + href + '" target="_self" download>' + text + '</a>';
+            }
+            // 그 외 링크는 기본 동작 수행
+            return this.origin.link.apply(this, arguments);
+          }
+        }
+      }
     }
   </script>
   <!-- Docsify v4 -->

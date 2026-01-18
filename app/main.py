@@ -10,37 +10,49 @@ from . import models, auth
 from .database import SessionLocal, engine, Base
 
 # 현재 파일(main.py)의 부모 디렉토리 (app/)
+# 이를 기준으로 템플릿, 정적 파일 경로를 설정합니다.
 BASE_DIR = Path(__file__).resolve().parent
 
 # 데이터베이스 테이블 생성
+# 애플리케이션 시작 시 모델에 정의된 테이블이 없으면 자동 생성합니다.
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# 템플릿 설정
+# Jinja2 템플릿 엔진 설정
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# 커스텀 404 예외 핸들러
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc):
+    """
+    404 에러 발생 시 JSON 대신 사용자 친화적인 HTML 페이지를 반환합니다.
+    """
     return templates.TemplateResponse(request=request, name="404.html", status_code=404)
 
-# 정적 파일 (로그인 페이지 스타일 등 공개 리소스용)
-# app/static 폴더를 /static 경로로 마운트
+# 정적 파일 (CSS, JS, 이미지 등) 설정
+# 로그인 페이지 스타일 등 인증 없이 접근 가능한 공개 리소스용입니다.
+# app/static 폴더를 /static 경로로 마운트합니다.
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-# 템플릿 설정
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-
-# DB 세션 의존성
+# DB 세션 의존성 주입 함수
 def get_db():
+    """
+    요청마다 새로운 DB 세션을 생성하고, 요청 처리가 끝나면 닫습니다.
+    FastAPI의 Depends를 통해 사용됩니다.
+    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# 초기 관리자 계정 생성
+# 초기 관리자 계정 생성 함수
 def create_initial_admin():
+    """
+    앱 시작 시 'admin' 사용자가 없으면 자동으로 생성합니다.
+    기본 비밀번호: admin (운영 환경에서는 변경 필수)
+    """
     db = SessionLocal()
     try:
         user = db.query(models.User).filter(models.User.username == "admin").first()
@@ -53,10 +65,15 @@ def create_initial_admin():
     finally:
         db.close()
 
+# 앱 시작 시 관리자 계정 확인 및 생성
 create_initial_admin()
 
-# 현재 사용자 가져오기 (쿠키 기반)
+# 현재 사용자 가져오기 (쿠키 기반 인증)
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """
+    요청의 쿠키에서 Access Token을 읽어 사용자를 식별합니다.
+    토큰이 없거나 유효하지 않으면 None을 반환합니다.
+    """
     token = request.cookies.get("access_token")
     if not token:
         return None
@@ -65,6 +82,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if token.startswith("Bearer "):
         token = token.split(" ")[1]
     
+    # 토큰 디코딩 및 검증 ('access' 타입 확인)
     payload = auth.decode_token(token)
     if payload is None or payload.get("type") != "access":
         return None
@@ -73,6 +91,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if username is None:
         return None
     
+    # DB에서 사용자 조회
     user = db.query(models.User).filter(models.User.username == username).first()
     return user
 
@@ -80,6 +99,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, current_user: models.User | None = Depends(get_current_user)):
+    """
+    메인 페이지 핸들러.
+    1. 로그인하지 않음 -> 로그인 페이지로 리다이렉트
+    2. 로그인했으나 미승인 -> 대기 페이지(pending.html) 표시
+    3. 승인된 사용자 -> 문서 메인(docs/index.html) 표시
+    """
     if not current_user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     if not current_user.is_active:
@@ -94,14 +119,20 @@ async def read_root(request: Request, current_user: models.User | None = Depends
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
+    """로그인 페이지 렌더링"""
     return templates.TemplateResponse(request=request, name="login.html")
 
 @app.post("/login")
 async def login(response: Response, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """
+    로그인 처리.
+    성공 시 Access Token과 Refresh Token을 쿠키에 설정합니다.
+    """
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not auth.verify_password(password, user.hashed_password):
         return RedirectResponse(url="/login?error=Invalid credentials", status_code=status.HTTP_302_FOUND)
     
+    # 토큰 생성
     access_token_expires = auth.timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
@@ -112,6 +143,9 @@ async def login(response: Response, username: str = Form(...), password: str = F
         data={"sub": user.username}, expires_delta=refresh_token_expires
     )
     
+    # 쿠키 설정
+    # access_token: API 인증용
+    # refresh_token: 토큰 갱신용 (path=/token/refresh 로 제한)
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, path="/token/refresh")
@@ -119,10 +153,14 @@ async def login(response: Response, username: str = Form(...), password: str = F
 
 @app.post("/token/refresh")
 async def refresh_token(request: Request, db: Session = Depends(get_db)):
+    """
+    Refresh Token을 사용하여 새로운 Access Token을 발급합니다.
+    """
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
     
+    # Refresh Token 검증
     payload = auth.decode_token(refresh_token)
     if payload is None or payload.get("type") != "refresh":
          raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
@@ -132,6 +170,7 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         
+    # 새 Access Token 생성
     access_token_expires = auth.timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
@@ -143,6 +182,10 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/logout")
 async def logout(response: Response):
+    """
+    로그아웃 처리.
+    모든 인증 쿠키를 삭제하고 로그인 페이지로 리다이렉트합니다.
+    """
     response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token", path="/token/refresh")
@@ -150,10 +193,15 @@ async def logout(response: Response):
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
+    """회원가입 페이지 렌더링"""
     return templates.TemplateResponse(request=request, name="register.html")
 
 @app.post("/register")
 async def register(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """
+    회원가입 처리.
+    새 사용자는 기본적으로 비활성(is_active=False) 상태로 생성되며, 관리자의 승인이 필요합니다.
+    """
     user = db.query(models.User).filter(models.User.username == username).first()
     if user:
         return RedirectResponse(url="/register?error=Username already registered", status_code=status.HTTP_302_FOUND)
@@ -168,6 +216,10 @@ async def register(username: str = Form(...), password: str = Form(...), db: Ses
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, current_user: models.User | None = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    관리자 페이지.
+    미승인 사용자 목록을 보여줍니다. 관리자 권한(is_superuser=True)이 필요합니다.
+    """
     if not current_user or not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not authorized")
     
@@ -177,6 +229,9 @@ async def admin_page(request: Request, current_user: models.User | None = Depend
 
 @app.post("/admin/approve/{user_id}")
 async def approve_user(user_id: int, current_user: models.User | None = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    사용자 승인 처리 (관리자 전용).
+    """
     if not current_user or not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not authorized")
     
@@ -189,6 +244,12 @@ async def approve_user(user_id: int, current_user: models.User | None = Depends(
 
 @app.get("/{file_path:path}")
 async def serve_docs(file_path: str, request: Request, current_user: models.User | None = Depends(get_current_user)):
+    """
+    정적 문서 파일 서빙 및 Catch-all 라우트.
+    1. 로그인하지 않은 경우 -> 로그인 페이지로 리다이렉트
+    2. 로그인 후, 요청된 경로가 docs/ 폴더 내에 있으면 파일 반환
+    3. 파일이 없으면 404 에러 (custom 404 페이지 표시)
+    """
     if not current_user:
         return RedirectResponse(url="/login")
     if not current_user.is_active:
@@ -198,11 +259,19 @@ async def serve_docs(file_path: str, request: Request, current_user: models.User
     docs_dir = BASE_DIR / "docs"
     requested_path = (docs_dir / file_path).resolve()
     
-    # 보안: 요청된 경로가 docs 폴더 내부에 있는지 확인
+    # 보안: 요청된 경로가 docs 폴더 내부에 있는지 확인 (Directory Traversal 방지)
     if not str(requested_path).startswith(str(docs_dir)):
          raise HTTPException(status_code=403, detail="Access denied")
     
+    # 파일이 존재하면 반환, 없으면 404
     if requested_path.exists() and requested_path.is_file():
+        # downloads 폴더 내의 파일이면 강제 다운로드(attachment) 처리
+        # filename 인자를 주면 FastAPI가 자동으로 Content-Disposition 헤더를 설정합니다.
+        if requested_path.is_relative_to(docs_dir / "downloads"):
+            return FileResponse(requested_path, filename=requested_path.name, media_type="application/octet-stream")
+            
         return FileResponse(requested_path)
     
     raise HTTPException(status_code=404, detail="File not found")
+
+    
