@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Account Pending</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+        h2 { color: #ffc107; }
+        p { color: #555; }
+        a { color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Waiting for Approval</h2>
+        <p>Hello, <strong>{{ username }}</strong>.</p>
+        <p>Your account is currently pending approval by an administrator.</p>
+        <p>Please check back later.</p>
+        <br>
+        <a href="/logout">Logout</a>
+    </div>
+</body>
+</html>

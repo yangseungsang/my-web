@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: sans-serif; padding: 2rem; background-color: #f0f2f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .approve-btn { background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        .approve-btn:hover { background-color: #218838; }
+        .empty { text-align: center; color: #888; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; }
+        .logout { color: #dc3545; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Admin Dashboard</h2>
+            <div>
+                <span>Welcome, {{ user.username }}</span> | 
+                <a href="/" style="margin-right: 10px;">Go to Docs</a>
+                <a href="/logout" class="logout">Logout</a>
+            </div>
+        </div>
+        
+        <h3>Pending User Approvals</h3>
+        
+        {% if users %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>Pending</td>
+                    <td>
+                        <form action="/admin/approve/{{ user.id }}" method="post">
+                            <button type="submit" class="approve-btn">Approve</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <div class="empty">No pending users found.</div>
+        {% endif %}
+    </div>
+</body>
+</html>
