@@ -38,8 +38,8 @@ async def login(response: Response, username: str = Form(...), password: str = F
     # access_token: API 인증용
     # refresh_token: 토큰 갱신용 (path=/token/refresh 로 제한)
     response = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, path="/token/refresh")
+    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True, secure=True, samesite="Lax")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, path="/token/refresh", secure=True, samesite="Lax")
     return response
 
 @router.post("/token/refresh")
@@ -68,7 +68,7 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
     )
     
     response = Response(content="Token refreshed", status_code=status.HTTP_200_OK)
-    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True, secure=True, samesite="Lax")
     return response
 
 @router.get("/logout")

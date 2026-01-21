@@ -16,3 +16,6 @@ wheels/
 *.db
 *.sqlite3
 app.db
+
+# SSL Certificates
+*.pem

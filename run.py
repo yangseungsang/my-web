@@ -43,17 +43,24 @@ def run_services():
         )
         processes.append(p_openwebui)
         
-        # 2. FastAPI 실행
-        print("[Run Script] Starting FastAPI on port 8000...")
+        # 2. FastAPI 실행 (SSL 적용)
+        print("[Run Script] Starting FastAPI on port 8000 with SSL (HTTPS)...")
         p_fastapi = subprocess.Popen(
-            ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
+            [
+                "uv", "run", "uvicorn", "app.main:app", 
+                "--host", "0.0.0.0", 
+                "--port", "8000", 
+                "--reload",
+                "--ssl-keyfile", "key.pem",
+                "--ssl-certfile", "cert.pem"
+            ],
             env=os.environ.copy()
         )
         processes.append(p_fastapi)
 
         print("\n" + "="*40)
         print("🚀 All services are starting!")
-        print("🏠 FastAPI Dashboard: http://localhost:8000")
+        print("🏠 FastAPI Dashboard: https://localhost:8000")
         print("🤖 OpenWebUI:       http://localhost:8080")
         print("="*40 + "\n")
         
