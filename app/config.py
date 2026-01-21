@@ -1,8 +1,16 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
+from fastapi.templating import Jinja2Templates
 
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv()
+
+# 현재 파일(config.py)의 부모 디렉토리 (app/)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Jinja2 템플릿 엔진 설정
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 class Settings:
     """

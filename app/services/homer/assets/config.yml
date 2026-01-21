@@ -9,6 +9,14 @@ defaults:
   layout: list
   colorTheme: auto
 theme: default
+
+# 상단바 링크: 로그아웃 버튼 배치
+links:
+  - name: "Logout"
+    icon: "fas fa-sign-out-alt"
+    url: "/logout"
+    target: "_self"
+
 colors:
   light:
     highlight-primary: "#3367d6"
@@ -48,6 +56,28 @@ services:
         url: "/docs/"
         target: "_self"
 
+  - name: "Applications"
+    icon: "fas fa-th"
+    items:
+      - name: "Hello Service"
+        logo: "assets/tools/sample.png"
+        subtitle: "A simple hello service"
+        tag: "Internal"
+        url: "/hello/"
+        target: "_self"
+      - name: "My Resume"
+        icon: "fas fa-file-alt"
+        subtitle: "Professional Resume"
+        tag: "Internal"
+        url: "/resume/"
+        target: "_self"
+      - name: "AI Chat (OpenWebUI)"
+        icon: "fas fa-brain"
+        subtitle: "Local LLM Chat"
+        tag: "AI"
+        url: "http://localhost:8080"
+        target: "_blank"
+
   - name: "System"
     icon: "fas fa-server"
     items:
@@ -56,9 +86,4 @@ services:
         subtitle: "User Management"
         tag: "Admin"
         url: "/admin"
-        target: "_self"
-      - name: "Logout"
-        logo: "assets/tools/sample.png"
-        subtitle: "Sign out"
-        url: "/logout"
         target: "_self"
